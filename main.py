@@ -46,6 +46,7 @@ def print_error_report(results, folder_path):
                             print(f"       Context: '{context[:100]}'...")
                 except Exception:
                     pass
+                print() # This line adds the extra one-line gap after each error's context.
 
 
 def validate_all_files(folder_path):

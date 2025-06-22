@@ -14,7 +14,7 @@ def check_entities(file_content, custom_entities=None):
     """
     errors = []
     lines = file_content.splitlines()
-    
+
     # Combine standard + custom allowed entities
     allowed_entities = DEFAULT_ENTITIES.union(custom_entities or set())
 
@@ -22,7 +22,7 @@ def check_entities(file_content, custom_entities=None):
     named_entity_pattern = re.compile(r'&([a-zA-Z0-9]+);')
 
     for line_num, line in enumerate(lines, 1):
-        
+
         # Detect malformed or unknown named entities
         for match in named_entity_pattern.finditer(line):
             entity = match.group(1)
@@ -31,9 +31,18 @@ def check_entities(file_content, custom_entities=None):
                 errors.append(("Repent", line_num, col, f"Invalid entity '&{entity};'"))
 
         # Detect stray unescaped ampersands (&) not part of any entity
-        amp_positions = [m.start() for m in re.finditer(r'&', line)]
-        for pos in amp_positions:
-            # Skip if part of a valid entity
+        for match in re.finditer(r'&', line):
+            pos = match.start()
+            after = line[pos + 1] if pos + 1 < len(line) else ''
+            before = line[pos - 1] if pos > 0 else ''
+
+            # Skip allowed forms:
+            if before == ' ' and after == ' ':
+                continue  # case: " & "
+            if pos == 0 and after == ' ':
+                continue  # case: line starts with "& "
+
+            # Check if this is part of a valid named entity
             if not named_entity_pattern.match(line[pos:]):
                 errors.append(("Repent", line_num, pos + 1, "Unescaped '&' found — use '&amp;'"))
 
