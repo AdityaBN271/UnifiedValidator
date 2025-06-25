@@ -1,5 +1,32 @@
 from lxml import etree
 import re
+def sanitize_unescaped_ampersands(xml_str):
+    """
+    Replaces unsafe & with &amp;, while preserving valid entities and legal-style usage.
+    - Skips replacements for: &entity;, &#number;
+    - Skips if & is surrounded by whitespace or punctuation (legal citations)
+    """
+    def replacer(match):
+        before, amp, after = match.group(1), match.group(2), match.group(3)
+        
+        # Do not escape if it looks like a valid entity (&name;)
+        if re.match(r'^[a-zA-Z0-9#]+;$', after.strip()):
+            return match.group(0)
+
+        # Do not escape if & is surrounded by spaces (e.g., "A & B")
+        if before.endswith(' ') and after.startswith(' '):
+            return match.group(0)
+
+        # Do not escape if & is followed by punctuation
+        if re.match(r'^\s*[.,;:\)]', after):
+            return match.group(0)
+
+        # Otherwise escape
+        return f"{before}&amp;{after}"
+
+    # Pattern to find ampersand with some context before/after
+    pattern = re.compile(r'(.{0,10}?)(\&)(.{0,10}?)')
+    return pattern.sub(replacer, xml_str)
 
 # ========== CLEANER ==========
 def preprocess_file_content(raw_content):
@@ -16,6 +43,7 @@ def preprocess_file_content(raw_content):
 
 # ========== ENTITY CONVERTER ==========
 ENTITY_TO_NUMERIC = {
+    "amp": "&#38;",
     "mdash": "&#8212;",
     "nbsp": "&#160;",
     "copy": "&#169;",
@@ -59,6 +87,7 @@ ENTITY_TO_NUMERIC = {
     'zacute': '&#378;', 'zcaron': '&#382;', 'zdot': '&#380;'
 }
 
+
 def replace_entities_with_numeric(xml_str):
     """Replaces named entities with numeric character references."""
     for entity, numeric in ENTITY_TO_NUMERIC.items():
@@ -66,20 +95,29 @@ def replace_entities_with_numeric(xml_str):
     return xml_str
 
 
+
+
+
 # ========== PARSER ==========
 def parse_xml(raw_content):
     """
-    Parses XML after cleaning page tags and replacing named entities.
+    Parses XML after cleaning page tags, replacing named entities,
+    and escaping invalid ampersands.
     Returns: (tree, errors, None)
     """
     try:
-        # Step 1: Remove page number lines
+        # Step 1: Remove <Page N> tags
         cleaned_content = preprocess_file_content(raw_content)
 
-        # ✅ Step 2: Replace known named entities with numeric references
+        cleaned_content = sanitize_unescaped_ampersands(cleaned_content)
+
+        # Step 2: Replace valid named entities with numeric refs
         cleaned_content = replace_entities_with_numeric(cleaned_content)
 
-        # Step 3: Wrap and parse safely
+        # Step 3: Sanitize remaining unescaped ampersands
+
+
+        # Step 4: Wrap and parse
         wrapped = f"<root>{cleaned_content}</root>"
         parser = etree.XMLParser(recover=False)
         tree = etree.fromstring(wrapped.encode('utf-8'), parser)
