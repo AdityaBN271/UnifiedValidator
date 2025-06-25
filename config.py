@@ -3,7 +3,7 @@
 # Comprehensive list of valid entities (names only, no ampersand or semicolon)
 CUSTOM_ENTITIES = {
     
-    "cacute", "itilde", "Lstrok", "nacute", "Sacute", "sacute","amp",
+    "cacute", "itilde", "Lstrok", "nacute", "Sacute", "sacute",
 
     "Agrave", "Aacute", "Acirc", "Atilde", "Auml", "Aring", "AElig",
     "Ccedil", "Egrave", "Eacute", "Ecirc", "Euml", "Igrave", "Iacute",

@@ -1,32 +1,5 @@
 from lxml import etree
 import re
-def sanitize_unescaped_ampersands(xml_str):
-    """
-    Replaces unsafe & with &amp;, while preserving valid entities and legal-style usage.
-    - Skips replacements for: &entity;, &#number;
-    - Skips if & is surrounded by whitespace or punctuation (legal citations)
-    """
-    def replacer(match):
-        before, amp, after = match.group(1), match.group(2), match.group(3)
-        
-        # Do not escape if it looks like a valid entity (&name;)
-        if re.match(r'^[a-zA-Z0-9#]+;$', after.strip()):
-            return match.group(0)
-
-        # Do not escape if & is surrounded by spaces (e.g., "A & B")
-        if before.endswith(' ') and after.startswith(' '):
-            return match.group(0)
-
-        # Do not escape if & is followed by punctuation
-        if re.match(r'^\s*[.,;:\)]', after):
-            return match.group(0)
-
-        # Otherwise escape
-        return f"{before}&amp;{after}"
-
-    # Pattern to find ampersand with some context before/after
-    pattern = re.compile(r'(.{0,10}?)(\&)(.{0,10}?)')
-    return pattern.sub(replacer, xml_str)
 
 # ========== CLEANER ==========
 def preprocess_file_content(raw_content):
@@ -40,10 +13,8 @@ def preprocess_file_content(raw_content):
 
     return "\n".join(cleaned_lines)
 
-
 # ========== ENTITY CONVERTER ==========
 ENTITY_TO_NUMERIC = {
-    "amp": "&#38;",
     "mdash": "&#8212;",
     "nbsp": "&#160;",
     "copy": "&#169;",
@@ -87,40 +58,56 @@ ENTITY_TO_NUMERIC = {
     'zacute': '&#378;', 'zcaron': '&#382;', 'zdot': '&#380;'
 }
 
-
 def replace_entities_with_numeric(xml_str):
     """Replaces named entities with numeric character references."""
     for entity, numeric in ENTITY_TO_NUMERIC.items():
         xml_str = xml_str.replace(f"&{entity};", numeric)
     return xml_str
 
+# ========== AMPERSAND SANITIZER ==========
+def sanitize_unescaped_ampersands(xml_str):
+    """
+    Replaces unsafe & with &amp;, while preserving:
+    - Valid entities (&amp;, &lt;, etc.)
+    - Legal-style usage (space & space)
+    - Numeric entities (&#123;, &#x1F600;)
+    """
+    def replacer(match):
+        full_match = match.group(0)
+        # Skip valid entities
+        if full_match.startswith('&#'):
+            return full_match
+        if full_match in {'&amp;', '&lt;', '&gt;', '&quot;', '&apos;'}:
+            return full_match
+        # Skip legal-style & surrounded by spaces
+        if re.match(r'[ ]&[ ]', full_match):
+            return full_match
+        # Skip & followed by punctuation
+        if re.match(r'&[,.;:)]', full_match):
+            return full_match
+        return '&amp;'
 
-
-
-
+    return re.sub(r'&(?!#|amp;|lt;|gt;|quot;|apos;|[a-zA-Z0-9]+;)', replacer, xml_str)
 # ========== PARSER ==========
 def parse_xml(raw_content):
     """
-    Parses XML after cleaning page tags, replacing named entities,
-    and escaping invalid ampersands.
+    Parses XML after cleaning page tags and escaping bad characters.
     Returns: (tree, errors, None)
     """
     try:
-        # Step 1: Remove <Page N> tags
+        # STEP 1: Pre-cleaning
         cleaned_content = preprocess_file_content(raw_content)
 
+        # STEP 2: Sanitize & only after validation — so nothing is lost before validation
         cleaned_content = sanitize_unescaped_ampersands(cleaned_content)
 
-        # Step 2: Replace valid named entities with numeric refs
+        # STEP 3: Replace known entities AFTER validation
         cleaned_content = replace_entities_with_numeric(cleaned_content)
 
-        # Step 3: Sanitize remaining unescaped ampersands
-
-
-        # Step 4: Wrap and parse
+        # STEP 4: Parse safely
         wrapped = f"<root>{cleaned_content}</root>"
         parser = etree.XMLParser(recover=False)
-        tree = etree.fromstring(wrapped.encode('utf-8'), parser)
+        tree = etree.fromstring(wrapped.encode("utf-8"), parser)
 
         return tree, [], None
 
@@ -131,16 +118,18 @@ def parse_xml(raw_content):
         return None, [("CheckSGM", 0, 0, "Permission denied")], None
 
     except etree.XMLSyntaxError as e:
-        error_log = e.error_log
         categorized_errors = []
-        for entry in error_log:
+        for entry in e.error_log:
             msg = entry.message.strip().lower()
-            if any(kw in msg for kw in ["xmlparseentityref", "unescaped", "no name", "amp", "lt", "gt", "semicolon"]):
+
+            repent_keywords = ["entity", "unescaped", "no name", "amp", "lt", "gt", "semicolon", "not defined"]
+            if any(word in msg for word in repent_keywords):
                 category = "Repent"
             elif "tag mismatch" in msg or "misnested" in msg or "start tag" in msg:
                 category = "Reptag"
             else:
                 category = "CheckSGM"
+
             categorized_errors.append((
                 category,
                 entry.line,
@@ -149,5 +138,3 @@ def parse_xml(raw_content):
             ))
         return None, categorized_errors, None
 
-    except Exception as e:
-        return None, [("CheckSGM", 0, 0, f"Unexpected error: {str(e)}")], None

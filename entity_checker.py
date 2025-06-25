@@ -1,50 +1,67 @@
 import re
-from config import CUSTOM_ENTITIES
+from config import CUSTOM_ENTITIES, SUPPORTED_TAGS
 
 DEFAULT_ENTITIES = {
     'amp', 'lt', 'gt', 'quot', 'apos',
-    'mdash', 'sect'
+    'mdash', 'sect', 'nbsp', 'copy'  # Add more as needed
 }
 
 def check_entities(file_content, custom_entities=None):
     """
-    Detects invalid or unescaped entities in the raw file content.
-    Returns: List of ("Repent", line, column, message) tuples.
+    Improved entity checker that properly handles:
+    - Valid XML/SGML tags
+    - Actual unescaped special chars
+    - Invalid entities
     """
     errors = []
     lines = file_content.splitlines()
     allowed_entities = DEFAULT_ENTITIES.union(custom_entities or set())
-    named_entity_pattern = re.compile(r'&([a-zA-Z0-9]+);')
+    
+    # Pattern to match XML/SGML tags
+    tag_pattern = re.compile(r'<\/?[a-zA-Z][a-zA-Z0-9]*(\s+[^>]*)?>')
+    # Pattern to match both named and numeric entities
+    entity_pattern = re.compile(r'&(#[0-9]+|#x[0-9a-fA-F]+|[a-zA-Z0-9]+);')
 
     for line_num, line in enumerate(lines, 1):
-
-        # Valid named entities
-        for match in named_entity_pattern.finditer(line):
+        # First find all valid tags in the line
+        tag_positions = []
+        for match in tag_pattern.finditer(line):
+            tag_positions.append((match.start(), match.end()))
+        
+        # Check for invalid entities
+        for match in entity_pattern.finditer(line):
             entity = match.group(1)
             if not entity.startswith('#') and entity not in allowed_entities:
-                col = match.start() + 1
-                errors.append(("Repent", line_num, col, f"Invalid entity '&{entity};'"))
+                # Check if this is inside a tag
+                inside_tag = any(start <= match.start() <= end for start, end in tag_positions)
+                if not inside_tag:
+                    col = match.start() + 1
+                    errors.append(("Repent", line_num, col, 
+                                 f"Invalid entity '&{entity};'"))
 
-        # Raw & checks — skip valid forms
-        for match in re.finditer(r'&', line):
-            idx = match.start()
-            before = line[idx - 1] if idx > 0 else ''
-            after = line[idx + 1] if idx + 1 < len(line) else ''
-
-            if (before == ' ' and after == ' ') or (idx == 0 and after == ' '):
-                continue  # safe
-
-            if not named_entity_pattern.match(line[idx:]):
-                errors.append(("Repent", line_num, idx + 1, "Unescaped '&' found — use '&amp;'"))
-
-        # Raw < checks
-        if '<' in line and not line.strip().startswith('<'):
-            col = line.find('<') + 1
-            errors.append(("Repent", line_num, col, "Unescaped '<' found — use '&lt;'"))
-
-        # Raw > checks
-        if '>' in line and not line.strip().endswith('>') and not line.strip().startswith('<'):
-            col = line.find('>') + 1
-            errors.append(("Repent", line_num, col, "Unescaped '>' found — use '&gt;'"))
+        # Check for unescaped special chars that aren't part of tags
+        pos = 0
+        while pos < len(line):
+            if line[pos] == '<':
+                # Check if this is part of a valid tag
+                if not any(start <= pos < end for start, end in tag_positions):
+                    errors.append(("Repent", line_num, pos + 1,
+                                 "Unescaped '<' found - use '&lt;'"))
+                pos += 1
+            elif line[pos] == '>':
+                if not any(start <= pos < end for start, end in tag_positions):
+                    errors.append(("Repent", line_num, pos + 1,
+                                 "Unescaped '>' found - use '&gt;'"))
+                pos += 1
+            elif line[pos] == '&':
+                # Check if this starts a valid entity or is a legal & usage
+                next_chars = line[pos:pos+10]  # Look ahead a bit
+                if (not entity_pattern.match(next_chars) and 
+                    not re.match(r'&\s', next_chars)):  # Ignore & followed by space
+                    errors.append(("Repent", line_num, pos + 1,
+                                 "Unescaped '&' found - use '&amp;'"))
+                pos += 1
+            else:
+                pos += 1
 
     return errors
