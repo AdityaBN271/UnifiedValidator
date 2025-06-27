@@ -1,7 +1,7 @@
 from lxml import etree
 
 def validate_tags(tree, allowed_tags=None, non_closing_tags=None, line_mapping=None):
-    """Validates XML tags and corrects line numbers using line_mapping if available."""
+    """Validates XML tags while ignoring specified non-closing tags."""
     errors = []
     if tree is None:
         return errors
@@ -9,9 +9,20 @@ def validate_tags(tree, allowed_tags=None, non_closing_tags=None, line_mapping=N
     non_closing_tags = non_closing_tags or set()
     root = tree.getroot()
 
+    # Helper function to check if tag matches any non-closing pattern
+    def is_non_closing(tag):
+        tag_lower = tag.lower()
+        return any(
+            tag_lower == base_tag.lower() or 
+            (base_tag.endswith('*') and tag_lower.startswith(base_tag.rstrip('*').lower())) or
+            (base_tag.endswith('*') and tag_lower == base_tag.lower().rstrip('*')) or
+            (base_tag[:-1].isdigit() and tag_lower == base_tag.lower()[:-1])
+            for base_tag in non_closing_tags
+        )
+
     # 🔍 Unknown tag check
     for elem in root.iter():
-        if allowed_tags and elem.tag not in allowed_tags and elem.tag not in non_closing_tags:
+        if not is_non_closing(elem.tag) and allowed_tags and elem.tag not in allowed_tags:
             parsed_line = elem.sourceline or 0
             col = getattr(elem, "sourcepos", 0)
             orig_line = line_mapping.get(parsed_line, parsed_line) if line_mapping else parsed_line
@@ -26,19 +37,17 @@ def validate_tags(tree, allowed_tags=None, non_closing_tags=None, line_mapping=N
         line = line_mapping.get(parsed_line, parsed_line) if line_mapping else parsed_line
 
         if event == "start":
-            tag_stack.append(tag)
+            if not is_non_closing(tag):
+                tag_stack.append(tag)
         elif event == "end":
-            if tag in non_closing_tags:
-                if tag in tag_stack:
-                    tag_stack.remove(tag)
+            if is_non_closing(tag):
                 continue
-
+                
             if not tag_stack or tag_stack[-1] != tag:
                 expected = tag_stack[-1] if tag_stack else "(none)"
                 errors.append(("Reptag", line, col,
-                               f"Misnested tag </{tag}> — expected </{expected}>"))
-
-            if tag_stack:
+                             f"Misnested tag </{tag}> — expected </{expected}>"))
+            else:
                 tag_stack.pop()
 
     return errors

@@ -2,13 +2,20 @@ from lxml import etree
 import re
 
 # ========== CLEANER ==========
+# In parser.py
 def preprocess_file_content(raw_content):
-    """Convert <Page N> to <Page/> to make XML valid."""
+    """Convert special tags to make XML valid."""
+    # Handle Page tags
     page_tag_pattern = re.compile(r"<\s*Page\s+\d+\s*>", re.IGNORECASE)
+    # Handle non-closing tags (fnr*, fnt*, fmt*, etc.)
+    non_closing_pattern = re.compile(r"<\s*(fnr\*|fnt\*|fmt\*|fnt\d+|fmt\d+)\b[^>]*>", re.IGNORECASE)
+    
     cleaned_lines = []
-
     for line in raw_content.splitlines():
+        # Handle Page tags
         new_line = page_tag_pattern.sub("<Page/>", line)
+        # Handle non-closing tags by converting them to self-closing tags
+        new_line = non_closing_pattern.sub(lambda m: f"<{m.group(1).lower()}/>", new_line)
         cleaned_lines.append(new_line)
 
     return "\n".join(cleaned_lines)
@@ -121,9 +128,7 @@ def parse_xml(raw_content):
         categorized_errors = []
         for entry in e.error_log:
             msg = entry.message.strip().lower()
-
-            repent_keywords = ["entity", "unescaped", "no name", "amp", "lt", "gt", "semicolon", "not defined"]
-            if any(word in msg for word in repent_keywords):
+            if any(x in msg for x in ["xmlparseentityref", "unescaped", "no name", "amp", "lt", "gt", "semicolon"]):
                 category = "Repent"
             elif "tag mismatch" in msg or "misnested" in msg or "start tag" in msg:
                 category = "Reptag"
@@ -136,5 +141,8 @@ def parse_xml(raw_content):
                 entry.column,
                 f"XML Syntax error: {entry.message.strip()}"
             ))
+
         return None, categorized_errors, None
 
+    except Exception as e:
+        return None, [("CheckSGM", 0, 0, f"Unexpected error: {str(e)}")], None

@@ -83,12 +83,17 @@ CUSTOM_ENTITIES = {
 # List of tags including non-closing tags
 SUPPORTED_TAGS = {
     'EM', 'EMB', 'EMU', 'EMS', 'EMBI', 'EMBU', 'EMBUI', 'EMBSUI', 'EMBUSI',
-    'EMUI', 'EMSI', 'EMSUI', 'SUP', 'SUB', 'FN', 'T', 'A', 'fnr', 'fnt', 'p20'
+    'EMUI', 'EMSI', 'EMSUI', 'SUP', 'SUB', 'FN', 'T', 'A', 'fnr', 'fnt', 'P20',
+    'fnr*', 'fnt*', 'fnt 1', 'fnt 2', 'fnt 3',                # Add all variants here too
+                      
 }
 
 # Non-closing tags that don't require closing validation
-NON_CLOSING_TAGS = {'fnr', 'fnt','fnt*', 'P20','PAGE'}
-
+NON_CLOSING_TAGS = {
+    'fnr', 'fnt', 'fnt*', 'fnr*', 'fnt 1', 'fnt 2', 'fnt 3',  # Add all number variants you need
+                    
+    'P20', 'PAGE'
+}
 # List of required tags for structure validation
 DEFAULT_REQUIRED_TAGS = [
     'case', 'title', 'judgment', 'court', 'date'
