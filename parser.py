@@ -111,38 +111,57 @@ def parse_xml(raw_content):
         # STEP 3: Replace known entities AFTER validation
         cleaned_content = replace_entities_with_numeric(cleaned_content)
 
-        # STEP 4: Parse safely
         wrapped = f"<root>{cleaned_content}</root>"
         parser = etree.XMLParser(recover=False)
         tree = etree.fromstring(wrapped.encode("utf-8"), parser)
-
         return tree, [], None
-
-    except FileNotFoundError:
-        return None, [("CheckSGM", 0, 0, "File not found")], None
-
-    except PermissionError:
-        return None, [("CheckSGM", 0, 0, "Permission denied")], None
 
     except etree.XMLSyntaxError as e:
         categorized_errors = []
-        for entry in e.error_log:
-            msg = entry.message.strip().lower()
-            if any(x in msg for x in ["xmlparseentityref", "unescaped", "no name", "amp", "lt", "gt", "semicolon"]):
-                category = "Repent"
-            elif "tag mismatch" in msg or "misnested" in msg or "start tag" in msg:
-                category = "Reptag"
-            else:
-                category = "CheckSGM"
+        seen_positions = set()  # Tracks unique (line, column)
 
-            categorized_errors.append((
-                category,
-                entry.line,
-                entry.column,
-                f"XML Syntax error: {entry.message.strip()}"
+        for entry in e.error_log:
+           msg = entry.message.strip()
+           key = (entry.line, entry.column)
+
+        # Skip duplicates from same position
+           if key in seen_positions:
+              continue
+           seen_positions.add(key)
+
+        # Category classification
+           lower_msg = msg.lower()
+           if any(x in lower_msg for x in [
+               "xmlparseentityref", "unescaped", "no name", "amp", "lt", "gt", "semicolon"
+           ]):
+               category = "Repent"
+           elif "tag mismatch" in lower_msg or "misnested" in lower_msg or "start tag" in lower_msg:
+               category = "Reptag"
+           else:
+               category = "CheckSGM"
+
+           categorized_errors.append((
+               category,
+               entry.line,
+               entry.column,
+               f"XML Syntax error: {msg}"
             ))
 
         return None, categorized_errors, None
 
     except Exception as e:
         return None, [("CheckSGM", 0, 0, f"Unexpected error: {str(e)}")], None
+
+
+    
+
+
+        
+
+
+    
+
+
+
+
+

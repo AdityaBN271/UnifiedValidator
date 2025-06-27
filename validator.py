@@ -69,3 +69,4 @@ if __name__ == "__main__":
                         print(f"[Line {line}, Col {col}] {msg}")
         else:
             print(f"\n✅ {fname}: No errors found")
+
