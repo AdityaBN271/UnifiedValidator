@@ -1,4 +1,7 @@
 from lxml import etree
+from entity_checker import check_entities
+from config import SUPPORTED_TAGS, NON_CLOSING_TAGS
+
 
 def validate_tags(tree, allowed_tags=None, non_closing_tags=None, line_mapping=None):
     """Validates XML tags while ignoring specified non-closing tags."""
