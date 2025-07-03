@@ -24,7 +24,9 @@ def categorize_errors(errors: List[Tuple]) -> Dict[str, List[Tuple]]:
 
         if category == "Repent" or any(kw in msg_lower for kw in ["unescaped", "xmlparseentityref", "no name", "amp", "lt", "gt", "semicolon"]):
             categorized["REPENT"].append((line, col, msg))
-        elif category == "Reptag" or any(kw in msg_lower for kw in ["tag mismatch", "misnested", "unknown tag"]):
+        elif category == "Reptag" or any(kw in msg_lower for kw in [
+            "tag mismatch", "misnested", "unknown tag", "must be inside", "must not be inside"
+        ]):
             categorized["REPTAG"].append((line, col, msg))
         else:
             categorized["CHECKSGM"].append((line, col, msg))
@@ -64,7 +66,6 @@ def run_all_checks(file_path, custom_entities=None, required_tags=None) -> Dict[
         tree,
         allowed_tags=required_tags or SUPPORTED_TAGS,
         non_closing_tags=NON_CLOSING_TAGS,
-        
     )
     all_errors.extend(tag_errors)
 

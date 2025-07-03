@@ -1,6 +1,41 @@
 from lxml import etree
 from entity_checker import check_entities
-from config import SUPPORTED_TAGS, NON_CLOSING_TAGS
+from config import SUPPORTED_TAGS, NON_CLOSING_TAGS, TAG_RELATIONSHIPS
+from lxml.etree import _Element
+
+def validate_tag_relationships(tree, line_mapping=None):
+    """Validates tag relationships based on configuration rules."""
+    errors = []
+    if tree is None:
+        return errors
+
+    for elem in tree.iter():
+        tag = elem.tag
+        if tag not in TAG_RELATIONSHIPS:
+            continue
+
+        rules = TAG_RELATIONSHIPS[tag]
+        parent = elem.getparent()
+        parent_tag = parent.tag if parent is not None else None
+
+        # Get line/col information
+        parsed_line = elem.sourceline or 0
+        col = getattr(elem, "sourcepos", 0)
+        line = line_mapping.get(parsed_line, parsed_line) if line_mapping else parsed_line
+
+        # Check fnt is inside FN
+        if tag == 'fnt' and rules.get('required_parent'):
+            if parent_tag != rules['required_parent']:
+                errors.append(("Reptag", line, col, 
+                             f"<{tag}> must be inside <{rules['required_parent']}> tags"))
+
+        # Check fnr is not inside FN
+        if tag == 'fnr' and rules.get('forbidden_parent'):
+            if parent_tag == rules['forbidden_parent']:
+                errors.append(("Reptag", line, col,
+                             f"<{tag}> must not be inside <{rules['forbidden_parent']}> tags"))
+
+    return errors
 
 
 def validate_tags(tree, allowed_tags=None, non_closing_tags=None, line_mapping=None):
@@ -23,15 +58,32 @@ def validate_tags(tree, allowed_tags=None, non_closing_tags=None, line_mapping=N
             for base_tag in non_closing_tags
         )
 
-    # 🔍 Unknown tag check
+    # 🔍 Tag validation
     for elem in root.iter():
-        if not is_non_closing(elem.tag) and allowed_tags and elem.tag not in allowed_tags:
-            parsed_line = elem.sourceline or 0
-            col = getattr(elem, "sourcepos", 0)
-            orig_line = line_mapping.get(parsed_line, parsed_line) if line_mapping else parsed_line
-            errors.append(("Reptag", orig_line, col, f"Unknown tag <{elem.tag}>"))
+        tag = elem.tag
+        parent = elem.getparent()
+        parent_tag = parent.tag if parent is not None else None
+        
+        parsed_line = elem.sourceline or 0
+        col = getattr(elem, "sourcepos", 0)
+        orig_line = line_mapping.get(parsed_line, parsed_line) if line_mapping else parsed_line
 
-    # 🔄 Nesting check
+        # Unknown tag check
+        if not is_non_closing(tag) and allowed_tags and tag not in allowed_tags:
+            errors.append(("Reptag", orig_line, col, f"Unknown tag <{tag}>"))
+        
+        # Check tags inside FN blocks
+        if parent_tag == 'FN':
+            if tag.lower() != 'fnt':
+                errors.append(("Reptag", orig_line, col, 
+                             f"Only <fnt> tags are allowed inside <FN> blocks, found <{tag}>"))
+        
+        # Check fnt tags outside FN blocks
+        if tag.lower() == 'fnt' and parent_tag != 'FN':
+            errors.append(("Reptag", orig_line, col, 
+                         f"<fnt> must be inside <FN> tags"))
+
+    # 🔄 Nesting check (existing code remains unchanged)
     tag_stack = []
     for event, elem in etree.iterwalk(tree, events=("start", "end")):
         tag = elem.tag

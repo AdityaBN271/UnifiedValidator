@@ -84,13 +84,13 @@ CUSTOM_ENTITIES = {
 SUPPORTED_TAGS = {
     'EM', 'EMB', 'EMU', 'EMS', 'EMBI', 'EMBU', 'EMBUI', 'EMBSUI', 'EMBUSI',
     'EMUI', 'EMSI', 'EMSUI', 'SUP', 'SUB', 'FN', 'T', 'A', 'fnr', 'fnt', 'P20',
-    'fnr*', 'fnt*', 'fnt 1', 'fnt 2', 'fnt 3',                # Add all variants here too
+    'fnr*', 'fnt*', 'fnt1', 'fnt2', 'fnt 3',                # Add all variants here too
                       
 }
 
 # Non-closing tags that don't require closing validation
 NON_CLOSING_TAGS = {
-    'fnr', 'fnt', 'fnt*', 'fnr*', 'fnt 1', 'fnt 2', 'fnt 3',  # Add all number variants you need
+    'fnr','fnt','fnt*','fnr*', 'fnt1', 'fnt2', 'fnt3',  # Add all number variants you need
                     
     'P20', 'PAGE'
 }
@@ -98,3 +98,19 @@ NON_CLOSING_TAGS = {
 DEFAULT_REQUIRED_TAGS = [
     'case', 'title', 'judgment', 'court', 'date'
 ]
+
+TAG_RELATIONSHIPS = {
+    'FN': {
+        'required_children': [],  # No specific children required
+        'allowed_children': ['fnt'],  # Only fnt allowed inside FN
+        'parent_requirements': None  # No specific parent required
+    },
+    'fnt': {
+        'required_parent': 'FN',  # Must be inside FN
+        'allowed_siblings': []  # No specific sibling requirements
+    },
+    'fnr': {
+        'forbidden_parent': 'FN',  # Must NOT be inside FN
+        'allowed_siblings': []  # No specific sibling requirements
+    }
+}
