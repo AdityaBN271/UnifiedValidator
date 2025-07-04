@@ -3,12 +3,13 @@ import re
 
 # ========== CLEANER ==========
 # In parser.py
+# In parser.py
 def preprocess_file_content(raw_content):
     """Convert special tags to make XML valid."""
     # Handle Page tags
     page_tag_pattern = re.compile(r"<\s*Page\s+\d+\s*>", re.IGNORECASE)
     # Handle non-closing tags (fnr*, fnt*, fmt*, etc.)
-    non_closing_pattern = re.compile(r"<\s*(fnr\*|fnt\*|fmt\*|fnt\d+|fmt\d+)\b[^>]*>", re.IGNORECASE)
+    non_closing_pattern = re.compile(r"<\s*(fnr\*|fnt\*|fmt\*|fnt\d+|fmt\d+|fnt)\b[^>]*>", re.IGNORECASE)
     
     cleaned_lines = []
     for line in raw_content.splitlines():
